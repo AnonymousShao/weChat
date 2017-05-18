@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <link rel="stylesheet" href="./bootstrap/dist/css/bootstrap.css">
+    <style>
+        .user{
+            color:blue;
+            cursor:pointer;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    <h3>聊天室</h3>
+                </div>
+                <div class="panel-body">
+                    <ul class="list-group" id="messages" onclick="handleClick(event)" >
+
+                    </ul>
+                </div>
+                <div class="panel-footer">
+                    <form onsubmit='send(event)'>
+                        <div class="form-group">
+                            <textarea name="content" id="content" cols="30" rows="10" class="form-control" required onkeydown="autoSend(event)"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <button class="btn btn-primary">发言</button>
+                        </div>
+
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="/socket.io/socket.io.js"></script>
+<!--页面中增加一个去全局变量io-->
+<script type="text/javascript">
+    let socket = io('/');
+    socket.on('connect',function () {
+        /*console.log('ss');
+        socket.send('你好');*/
+        socket.emit('getAllMessages');
+    });
+    let ulMessages = document.querySelector('#messages');
+    let format = function (msgObj) {
+       return `<span class="user">${msgObj.author}</span>:${msgObj.content}<button data-id="${msgObj._id}" class="btn btn-danger" data-cmd="delete">删除</button><button data-id="${msgObj._id}" class="btn btn-warning" data-cmd="revoke">撤回</button><span class="pull-right">${msgObj.createAt}</span>`;
+    };
+    socket.on('message',function (msgObj) {
+        let li = document.createElement('li');
+        li.className = 'list-group-item';
+        li.innerHTML = format(msgObj) ;
+        li.id =`message_${msgObj._id}`;
+        ulMessages.appendChild(li)
+    });
+    socket.on('allMessages',function (messages) {
+        let html = messages.map(function (message,index) {
+            return `<li class="list-group-item" id="message_${message._id}">${format(message)}</li>`;
+        }).join('');
+        ulMessages.innerHTML = html;
+    });
+    socket.on('deleted',function (id) {
+        let li = document.querySelector(`#message_${id}`);
+        li.parentNode.removeChild(li);
+    });
+    socket.on('revoked',function (id) {
+        let li = document.querySelector(`#message_${id}`);
+        li.parentNode.removeChild(li);
+    });
+
+    let areaContent = document.querySelector('#content');
+    function send(event) {
+        event.preventDefault();
+        let content = areaContent.value;
+        socket.send(content);
+        areaContent.value ='';
+    }
+
+    let ctrlDown = false;
+    let ctrlTimer;
+    function autoSend(event) {
+        let code = event.keyCode;
+        if(code == 17){
+            if(ctrlTimer){
+                clearTimeout(ctrlTimer);
+                ctrlTimer = null;
+            }
+            ctrlDown = true;
+            ctrlTimer = setTimeout(function () {
+                ctrlDown = false;
+            },1000)
+        }
+        if(code == 13){
+            if(ctrlDown){
+                areaContent.value = areaContent.value + '\n';
+            }else{
+                send(event);
+            }
+
+        }
+    }
+    function handleClick(event) {
+        let ele = event.target;
+        if(/(^| )user( |$)/.test(ele.className)){
+            areaContent.value = `@${ele.innerHTML} `;
+        }else if(ele.dataset.cmd == 'delete'){
+            let id = ele.dataset.id;
+            socket.emit('delete',id);
+        }else if(ele.dataset.cmd == 'revoke'){
+            let id = ele.dataset.id;
+            socket.emit('revoke',id);
+        }
+
+    }
+</script>
+</body>
+</html>
